@@ -311,16 +311,15 @@ export default class SceneEntryManager {
       );
 
       const headSpawnOffset = { x: 0, y: 0.2, z: 0 };
-      console.log("Algo!2!");
       orientation.then(or => {
         console.log("The Orientation is " + or);
         entity.setAttribute("offset-relative-to", {
           target: "#avatar-pov-node",
           offset: headSpawnOffset,
-          orientation: or
+          orientation: or,
+          lookAt: true
         });
       });
-      entity.object3D.setRotationFromQuaternion(avatarPovNode.object3D.quaternion);
 
       return entity;
     };
