@@ -271,7 +271,7 @@ export default class SceneEntryManager {
   };
 
   _setupMedia = mediaStream => {
-    const offset = { x: 0, y: 0, z: -1.5 };
+    const offset = { x: 0, y: 0, z: 0 };
     const spawnMediaInfrontOfPlayer = (src, contentOrigin) => {
       if (!this.hubChannel.can("spawn_and_move_media")) return;
       const { entity, orientation } = addMedia(
@@ -285,8 +285,38 @@ export default class SceneEntryManager {
       orientation.then(or => {
         entity.setAttribute("offset-relative-to", {
           target: "#avatar-pov-node",
-          offset,
+          offset: offset,
           orientation: or
+        });
+      });
+
+      return entity;
+    };
+
+    const spawnMediaOnPlayerHead = (src, contentOrigin) => {
+      // TODO: Code this
+      if (!this.hubChannel.can("spawn_and_move_media")) return;
+      const avatarPovNode = document.getElementById("avatar-pov-node");
+      const { entity, orientation } = addMedia(
+        src,
+        "#static-media",
+        contentOrigin,
+        null,
+        !(src instanceof MediaStream),
+        true,
+        true,
+        {},
+        true,
+        avatarPovNode
+      );
+
+      const headSpawnOffset = { x: 0, y: 0.2, z: 0 };
+      orientation.then(or => {
+        entity.setAttribute("offset-relative-to", {
+          target: "#avatar-pov-node",
+          offset: headSpawnOffset,
+          orientation: or,
+          lookAt: true
         });
       });
 
@@ -418,8 +448,9 @@ export default class SceneEntryManager {
       if (videoTracks.length > 0) {
         newStream.getVideoTracks().forEach(track => mediaStream.addTrack(track));
         await NAF.connection.adapter.setLocalMediaStream(mediaStream);
-        currentVideoShareEntity = spawnMediaInfrontOfPlayer(mediaStream, undefined);
-
+        // currentVideoShareEntity = spawnMediaInfrontOfPlayer(mediaStream, undefined);
+        // This is where we need to override.
+        currentVideoShareEntity = spawnMediaOnPlayerHead(mediaStream, undefined);
         // Wire up custom removal event which will stop the stream.
         currentVideoShareEntity.setAttribute("emit-scene-event-on-remove", "event:action_end_video_sharing");
       }
@@ -430,10 +461,12 @@ export default class SceneEntryManager {
     };
 
     this.scene.addEventListener("action_share_camera", () => {
+      // This is where A frame receives the event
       shareVideoMediaStream({
         video: {
           mediaSource: "camera",
           width: isIOS ? { max: 1280 } : { max: 1280, ideal: 720 },
+          height: 720,
           frameRate: 30
         }
       });
