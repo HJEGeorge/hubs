@@ -312,7 +312,6 @@ export default class SceneEntryManager {
 
       const headSpawnOffset = { x: 0, y: 0.2, z: 0 };
       orientation.then(or => {
-        console.log("The Orientation is " + or);
         entity.setAttribute("offset-relative-to", {
           target: "#avatar-pov-node",
           offset: headSpawnOffset,
@@ -467,6 +466,7 @@ export default class SceneEntryManager {
         video: {
           mediaSource: "camera",
           width: isIOS ? { max: 1280 } : { max: 1280, ideal: 720 },
+          height: 720,
           frameRate: 30
         }
       });
