@@ -34,6 +34,7 @@ export default class SceneEntryManager {
     this.rightCursorController = document.getElementById("right-cursor-controller");
     this.leftCursorController = document.getElementById("left-cursor-controller");
     this.avatarRig = document.getElementById("avatar-rig");
+    this.avatarPovNode = document.getElementById("avatar-pov-node");
     this._entered = false;
     this.performConditionalSignIn = () => {};
     this.history = history;
@@ -64,7 +65,7 @@ export default class SceneEntryManager {
 
       // HACK - A-Frame calls getVRDisplays at module load, we want to do it here to
       // force gamepads to become live.
-      navigator.getVRDisplays();
+      "getVRDisplays" in navigator && navigator.getVRDisplays();
 
       await exit2DInterstitialAndEnterVR(true);
     }
@@ -91,6 +92,7 @@ export default class SceneEntryManager {
     if (isBotMode) {
       this._runBot(mediaStream);
       this.scene.addState("entered");
+      this.hubChannel.sendEnteredEvent();
       return;
     }
 
@@ -107,7 +109,7 @@ export default class SceneEntryManager {
 
     // Delay sending entry event telemetry until VR display is presenting.
     (async () => {
-      while (enterInVR && !(await navigator.getVRDisplays()).find(d => d.isPresenting)) {
+      while (enterInVR && !this.scene.renderer.vr.isPresenting()) {
         await nextTick();
       }
 
@@ -271,7 +273,7 @@ export default class SceneEntryManager {
   };
 
   _setupMedia = mediaStream => {
-    const offset = { x: 0, y: 0, z: -1.5 };
+    const offset = { x: -1, y: 4, z: 9 };
     const spawnMediaInfrontOfPlayer = (src, contentOrigin) => {
       if (!this.hubChannel.can("spawn_and_move_media")) return;
       const { entity, orientation } = addMedia(
@@ -282,11 +284,43 @@ export default class SceneEntryManager {
         !(src instanceof MediaStream),
         true
       );
+
+      // TODO: maybe add hub ID
+      orientation.then(or => {
+        entity.setAttribute("offset-absolute", {
+          target: "#avatar-pov-node",
+          offset: offset,
+          orientation: or
+        });
+      });
+
+
+    const spawnMediaOnPlayerHead = (src, contentOrigin) => {
+      // TODO: Code this
+      if (!this.hubChannel.can("spawn_and_move_media")) return;
+      const parentEl = document.getElementById("avatar-rig").querySelector(".camera");
+      parentEl.setAttribute("networked", { template: "#static-media" });
+      const { entity, orientation } = addMedia(
+        src,
+        "#static-media",
+        contentOrigin,
+        null,
+        !(src instanceof MediaStream),
+        true,
+        true,
+        {},
+        true,
+        parentEl
+      );
+      entity.object3D.scale.set(0.4, 0.4, 0.4);
+
+      const headSpawnOffset = { x: 0, y: 0, z: -0.025 };
       orientation.then(or => {
         entity.setAttribute("offset-relative-to", {
           target: "#avatar-pov-node",
-          offset,
-          orientation: or
+          offset: headSpawnOffset,
+          orientation: or,
+          lookAt: true
         });
       });
 
@@ -417,9 +451,14 @@ export default class SceneEntryManager {
 
       if (videoTracks.length > 0) {
         newStream.getVideoTracks().forEach(track => mediaStream.addTrack(track));
-        await NAF.connection.adapter.setLocalMediaStream(mediaStream);
-        currentVideoShareEntity = spawnMediaInfrontOfPlayer(mediaStream, undefined);
 
+        if (newStream && newStream.getAudioTracks().length > 0) {
+          const audioSystem = this.scene.systems["hubs-systems"].audioSystem;
+          audioSystem.addStreamToOutboundAudio("screenshare", newStream);
+        }
+
+        await NAF.connection.adapter.setLocalMediaStream(mediaStream);
+        currentVideoShareEntity = spawnMediaOnPlayerHead(mediaStream, undefined);
         // Wire up custom removal event which will stop the stream.
         currentVideoShareEntity.setAttribute("emit-scene-event-on-remove", "event:action_end_video_sharing");
       }
@@ -433,8 +472,9 @@ export default class SceneEntryManager {
       shareVideoMediaStream({
         video: {
           mediaSource: "camera",
-          width: isIOS ? { max: 1280 } : { max: 1280, ideal: 720 },
-          frameRate: 30
+          width: isIOS ? { max: 1280 } : { max: 240, ideal: 240 },
+          height: 240,
+          frameRate: 20
         }
       });
     });
@@ -449,7 +489,11 @@ export default class SceneEntryManager {
             height: 720,
             frameRate: 30
           },
-          audio: true
+          audio: {
+            echoCancellation: window.APP.store.state.preferences.disableEchoCancellation === true ? false : true,
+            noiseSuppression: window.APP.store.state.preferences.disableNoiseSuppression === true ? false : true,
+            autoGainControl: window.APP.store.state.preferences.disableAutoGainControl === true ? false : true
+          }
         },
         true
       );
@@ -467,6 +511,9 @@ export default class SceneEntryManager {
       for (const track of mediaStream.getVideoTracks()) {
         mediaStream.removeTrack(track);
       }
+
+      const audioSystem = this.scene.systems["hubs-systems"].audioSystem;
+      audioSystem.removeStreamFromOutboundAudio("screenshare");
 
       await NAF.connection.adapter.setLocalMediaStream(mediaStream);
       currentVideoShareEntity = null;
@@ -506,7 +553,6 @@ export default class SceneEntryManager {
 
       if (myCamera) {
         myCamera.parentNode.removeChild(myCamera);
-        this.scene.removeState("camera");
       } else {
         const entity = document.createElement("a-entity");
         entity.setAttribute("networked", { template: "#interactable-camera" });
@@ -515,11 +561,7 @@ export default class SceneEntryManager {
           offset: { x: 0, y: 0, z: -1.5 }
         });
         this.scene.appendChild(entity);
-        this.scene.addState("camera");
       }
-
-      // Need to wait a frame so camera is registered with system.
-      setTimeout(() => this.scene.emit("camera_toggled"));
     });
 
     this.scene.addEventListener("photo_taken", e => this.hubChannel.sendMessage({ src: e.detail }, "photo"));
@@ -530,6 +572,7 @@ export default class SceneEntryManager {
     this.avatarRig.setAttribute("networked", "template: #remote-avatar; attachTemplateToLocal: false;");
     this.avatarRig.setAttribute("networked-avatar", "");
     this.avatarRig.emit("entered");
+    this.scene.emit("action_share_camera");
   };
 
   _runBot = async mediaStream => {
