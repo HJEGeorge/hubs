@@ -66,13 +66,17 @@ export const SCHEMA = {
       type: "object",
       additionalProperties: false,
       properties: {
+        shouldPromptForRefresh: { type: "bool" },
+        preferredCamera: { type: "string" },
         muteMicOnEntry: { type: "bool" },
         audioOutputMode: { type: "string" },
+        invertTouchscreenCameraMove: { type: "bool" },
         enableOnScreenJoystickLeft: { type: "bool" },
         enableOnScreenJoystickRight: { type: "bool" },
         onlyShowNametagsInFreeze: { type: "bool" },
         allowMultipleHubsInstances: { type: "bool" },
         disableIdleDetection: { type: "bool" },
+        preferMobileObjectInfoPanel: { type: "bool" },
         maxResolutionWidth: { type: "number" },
         maxResolutionHeight: { type: "number" },
         globalVoiceVolume: { type: "number" },
@@ -85,7 +89,10 @@ export const SCHEMA = {
         disableStrafing: { type: "bool" },
         disableTeleporter: { type: "bool" },
         disableAutoPixelRatio: { type: "bool" },
-        movementSpeedModifier: { type: "number" }
+        movementSpeedModifier: { type: "number" },
+        disableEchoCancellation: { type: "bool" },
+        disableNoiseSuppression: { type: "bool" },
+        disableAutoGainControl: { type: "bool" }
       }
     },
 
